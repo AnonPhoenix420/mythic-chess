@@ -1,51 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { Chess } from 'chess.js';
-import { Trophy, Swords, Zap, RefreshCw, LayoutGrid, User, Cpu } from 'lucide-react';
+import { Trophy, Swords, Zap, RefreshCw, Cpu, User, ShieldAlert, Activity } from 'lucide-react';
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
-// --- THEME DEFINITIONS ---
 const THEMES = {
   mythic: {
     name: "Knights vs Dragons",
-    light: "bg-amber-100",
-    dark: "bg-amber-800",
+    light: "bg-[#e2d1b3]", 
+    dark: "bg-[#7d4427]",  
     white: { p: '🛡️', r: '🏰', n: '🐎', b: '🏹', q: '👸', k: '🤴' },
     black: { p: '🔥', r: '🌋', n: '🦎', b: '🐍', q: '🐲', k: '💀' }
   },
   heaven: {
     name: "Angels vs Demons",
-    light: "bg-sky-100",
-    dark: "bg-indigo-900",
+    light: "bg-blue-50",
+    dark: "bg-slate-800",
     white: { p: '🕊️', r: '☁️', n: '🎺', b: '⚖️', q: '✨', k: '😇' },
     black: { p: '🕯️', r: '⛓️', n: '🐐', b: '🔱', q: '🔥', k: '😈' }
   },
   wizard: {
     name: "Wizards vs Witches",
     light: "bg-purple-100",
-    dark: "bg-purple-900",
+    dark: "bg-indigo-950",
     white: { p: '🧪', r: '📜', n: '🦉', b: '🔮', q: '🧹', k: '🧙' },
     black: { p: '🍄', r: '💀', n: '🐈‍⬛', b: '👁️', q: '🕯️', k: '🧙‍♀️' }
-  },
-  classic: {
-    name: "Classic Pro",
-    light: "bg-slate-200",
-    dark: "bg-slate-500",
-    white: { p: '♙', r: '♖', n: '♘', b: '♗', q: '♕', k: '♔' },
-    black: { p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚' }
   }
 };
 
 export default function App() {
   const [game, setGame] = useState(new Chess());
-  const [gameType, setGameType] = useState('chess'); // chess or checkers
   const [theme, setTheme] = useState('mythic');
-  const [mode, setMode] = useState('pvp'); // pvp or ai
+  const [mode, setMode] = useState('pvp');
   const [selectedSquare, setSelectedSquare] = useState(null);
-  const [iq, setIq] = useState(1200);
+  const [moveHistory, setMoveHistory] = useState([]);
 
-  // --- GAME LOGIC ---
-  const onSquareClick = (square) => {
+  const currentTheme = THEMES[theme];
+
+  function onSquareClick(square) {
+    const piece = game.get(square);
     if (selectedSquare === null) {
-      const piece = game.get(square);
       if (piece && piece.color === game.turn()) {
         setSelectedSquare(square);
       }
@@ -53,10 +46,7 @@ export default function App() {
       const move = makeMove(selectedSquare, square);
       if (move) {
         setSelectedSquare(null);
-        if (mode === 'ai') setTimeout(makeAIMove, 500);
       } else {
-        // Switch selection if clicking another of your own pieces
-        const piece = game.get(square);
         if (piece && piece.color === game.turn()) {
           setSelectedSquare(square);
         } else {
@@ -64,88 +54,86 @@ export default function App() {
         }
       }
     }
-  };
+  }
 
-  const makeMove = (from, to) => {
+  function makeMove(from, to) {
     try {
       const gameCopy = new Chess(game.fen());
       const move = gameCopy.move({ from, to, promotion: 'q' });
       if (move) {
         setGame(gameCopy);
-        if (gameCopy.isCheckmate()) setIq(prev => prev + 25);
+        setMoveHistory([...moveHistory, move.san]);
+        if (mode === 'ai' && !gameCopy.isGameOver()) {
+          setTimeout(makeAIMove, 400);
+        }
         return move;
       }
     } catch (e) { return null; }
-  };
+  }
 
-  const makeAIMove = () => {
+  function makeAIMove() {
     const moves = game.moves();
     if (moves.length > 0) {
       const randomMove = moves[Math.floor(Math.random() * moves.length)];
       game.move(randomMove);
       setGame(new Chess(game.fen()));
     }
-  };
-
-  const resetGame = () => {
-    setGame(new Chess());
-    setSelectedSquare(null);
-  };
-
-  const currentTheme = THEMES[theme];
+  }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col items-center p-4">
+    <div className="fixed inset-0 bg-black text-slate-200 flex flex-col items-center p-4 font-mono select-none overflow-hidden">
+      <SpeedInsights />
       
-      {/* HEADER SECTION */}
-      <header className="w-full max-w-md flex justify-between items-center mb-6">
+      {/* SYSTEM HEADER */}
+      <div className="w-full max-w-[420px] flex justify-between items-end mb-4 border-b border-slate-800 pb-2">
         <div>
-          <h1 className="text-xl font-black tracking-tighter flex items-center gap-2 text-emerald-400">
-            <Swords size={24} /> MYTHIC CHESS
+          <h1 className="text-xl font-black tracking-tighter text-emerald-500 flex items-center gap-2">
+            <Swords size={22} /> MYTHIC_INTEL
           </h1>
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Digital Intel System v3.0</p>
+          <p className="text-[9px] text-slate-500 uppercase tracking-[0.2em]">Nexus Node: Active</p>
         </div>
-        <button onClick={resetGame} className="p-2 bg-slate-800 rounded-lg active:scale-95 transition-transform">
-          <RefreshCw size={20} className="text-slate-300" />
-        </button>
-      </header>
-
-      {/* IQ STAT CARD */}
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 p-3 rounded-2xl mb-6 flex items-center justify-between shadow-xl">
-        <div className="flex items-center gap-3">
-          <div className="bg-emerald-500/20 p-2 rounded-lg">
-            <Zap className="text-emerald-400 fill-emerald-400" size={20} />
+        <div className="flex gap-2">
+          <div className="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800">
+            <Activity size={10} className="text-emerald-500 animate-pulse" />
+            <span className="text-[8px] text-emerald-500 font-bold">LIVE_DATA</span>
           </div>
-          <div>
-            <p className="text-[10px] text-slate-500 font-bold uppercase">Intelligence Rank</p>
-            <p className="text-lg font-black tracking-tight">{iq} <span className="text-xs text-emerald-500 font-medium">STRATEGIST</span></p>
-          </div>
+          <button onClick={() => {setGame(new Chess()); setMoveHistory([]);}} className="p-2 bg-slate-900 border border-slate-800 rounded-md active:bg-emerald-900 transition-colors">
+            <RefreshCw size={18} className="text-emerald-500" />
+          </button>
         </div>
-        <Trophy size={28} className="text-slate-700" />
       </div>
 
-      {/* THE CHESS BOARD */}
-      <div className="w-full max-w-md aspect-square grid grid-cols-8 border-4 border-slate-800 rounded-xl overflow-hidden shadow-2xl relative">
-        {game.board().map((row, i) => row.map((square, j) => {
-          const squareCoord = String.fromCharCode(97 + j) + (8 - i);
-          const isDark = (i + j) % 2 === 1;
-          const piece = square;
-          const isSelected = selectedSquare === squareCoord;
+      {/* GAME STATUS BAR */}
+      <div className="w-full max-w-[420px] grid grid-cols-3 gap-2 mb-4">
+        <div className={`p-2 rounded border ${game.turn() === 'w' ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-900 border-slate-800 text-slate-600'} text-center text-[10px] font-bold transition-all`}>
+          WHITE_UNIT
+        </div>
+        <div className="flex items-center justify-center">
+          {game.inCheck() && <div className="flex items-center gap-1 text-red-500 animate-pulse text-[10px] font-bold"><ShieldAlert size={12}/> CHECK</div>}
+        </div>
+        <div className={`p-2 rounded border ${game.turn() === 'b' ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' : 'bg-slate-900 border-slate-800 text-slate-600'} text-center text-[10px] font-bold transition-all`}>
+          BLACK_UNIT
+        </div>
+      </div>
 
+      {/* FIXED ASPECT BOARD */}
+      <div className="w-full max-w-[420px] aspect-square grid grid-cols-8 border-[4px] border-slate-900 shadow-[0_0_40px_rgba(0,0,0,0.7)] bg-slate-900 touch-none">
+        {game.board().map((row, i) => row.map((square, j) => {
+          const coords = `${String.fromCharCode(97 + j)}${8 - i}`;
+          const isDark = (i + j) % 2 === 1;
+          const isSelected = selectedSquare === coords;
+          
           return (
             <div 
-              key={squareCoord}
-              onClick={() => onSquareClick(squareCoord)}
-              className={`flex items-center justify-center text-4xl sm:text-5xl cursor-pointer transition-colors
+              key={coords}
+              onClick={() => onSquareClick(coords)}
+              className={`relative flex items-center justify-center text-3xl sm:text-4xl transition-all duration-75
                 ${isDark ? currentTheme.dark : currentTheme.light}
-                ${isSelected ? 'ring-4 ring-inset ring-emerald-400 z-10' : ''}`}
+                ${isSelected ? 'ring-4 ring-inset ring-emerald-400 bg-emerald-500/20 z-10' : ''}`}
             >
-              {piece && (
-                <span className={`drop-shadow-lg select-none transform active:scale-110 transition-transform
-                  ${theme === 'classic' ? currentTheme.pieces[piece.color] : ''}`}>
-                  {theme === 'classic' 
-                    ? currentTheme.white[piece.type] 
-                    : (piece.color === 'w' ? currentTheme.white[piece.type] : currentTheme.black[piece.type])}
+              {square && (
+                <span className="drop-shadow-2xl transform active:scale-110 transition-transform pointer-events-none">
+                  {square.color === 'w' ? currentTheme.white[square.type] : currentTheme.black[square.type]}
                 </span>
               )}
             </div>
@@ -153,42 +141,44 @@ export default function App() {
         }))}
       </div>
 
-      {/* GAME CONTROLS */}
-      <div className="w-full max-w-md mt-6 grid grid-cols-2 gap-3">
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
-          <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Battle Theme</label>
-          <select 
-            value={theme}
-            onChange={(e) => setTheme(e.target.value)}
-            className="bg-transparent text-emerald-400 font-bold text-sm outline-none w-full appearance-none cursor-pointer"
-          >
-            {Object.entries(THEMES).map(([id, t]) => <option key={id} value={id}>{t.name}</option>)}
-          </select>
+      {/* CONTROL DECK */}
+      <div className="w-full max-w-[420px] mt-6 space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg">
+            <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Visual Skin</p>
+            <select 
+              value={theme}
+              onChange={(e) => setTheme(e.target.value)}
+              className="bg-transparent text-emerald-400 font-bold text-xs w-full outline-none cursor-pointer"
+            >
+              {Object.entries(THEMES).map(([id, t]) => <option key={id} value={id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 p-3 rounded-lg">
+            <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Combat Logic</p>
+            <button onClick={() => setMode(mode === 'pvp' ? 'ai' : 'pvp')} className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase w-full">
+              {mode === 'pvp' ? <User size={14}/> : <Cpu size={14}/>} {mode === 'pvp' ? 'Human' : 'Neural'}
+            </button>
+          </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
-          <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Opponent</label>
-          <button 
-            onClick={() => setMode(mode === 'pvp' ? 'ai' : 'pvp')}
-            className="flex items-center gap-2 text-emerald-400 font-bold text-sm uppercase tracking-tight"
-          >
-            {mode === 'pvp' ? <User size={14}/> : <Cpu size={14}/>}
-            {mode === 'pvp' ? 'Player' : 'Deep Engine'}
-          </button>
+        {/* HUD DATA */}
+        <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-lg flex items-center justify-between shadow-inner">
+          <div className="flex items-center gap-4">
+            <div className="h-10 w-10 bg-emerald-500/10 rounded flex items-center justify-center border border-emerald-500/20">
+              <Zap className="text-emerald-400 fill-emerald-400" size={20} />
+            </div>
+            <div>
+              <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Cognitive Index</p>
+              <p className="text-lg font-black tracking-widest text-white">1240 <span className="text-[8px] font-normal text-emerald-500 ml-1">RANK_ELITE</span></p>
+            </div>
+          </div>
+          <div className="text-right">
+             <p className="text-[9px] font-bold text-slate-500 uppercase">Packet_Log</p>
+             <p className="text-[10px] text-emerald-500 font-bold font-mono tracking-tighter">{moveHistory.slice(-1)[0] || '---'}</p>
+          </div>
         </div>
       </div>
-
-      {/* NAVIGATION FOOTER */}
-      <nav className="w-full max-w-md mt-auto pt-6 flex justify-around border-t border-slate-900">
-        <button className="flex flex-col items-center gap-1 text-emerald-400">
-          <Swords size={20} />
-          <span className="text-[10px] font-bold">PLAY</span>
-        </button>
-        <button onClick={() => alert("Checkers & Puzzles Unlocking Soon...")} className="flex flex-col items-center gap-1 text-slate-500 hover:text-white transition-colors">
-          <LayoutGrid size={20} />
-          <span className="text-[10px] font-bold">MODE</span>
-        </button>
-      </nav>
     </div>
   );
 }
