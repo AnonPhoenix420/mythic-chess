@@ -1,194 +1,183 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
-import { Trophy, Swords, Zap, RefreshCw, LayoutGrid, User, Cpu } from 'lucide-react';
+import { Swords, Zap, RefreshCw, Cpu, User, Terminal, ShieldAlert, Activity, Trophy } from 'lucide-react';
+import { SpeedInsights } from "@vercel/speed-insights/react";
 
-// --- THEME DEFINITIONS ---
 const THEMES = {
-  mythic: {
+  vamp_wolf: {
+    name: "Vampires vs Werewolves",
+    board: "bg-red-950/20",
+    cells: { light: "bg-slate-300", dark: "bg-red-900" },
+    w: { k: '🧛', q: '🩸', r: '⚰️', b: '🦇', n: '🍷', p: '💉' },
+    b: { k: '🐺', q: '🌕', r: '🌲', b: '🐾', n: '🦴', p: '🐾' }
+  },
+  knight_dragon: {
     name: "Knights vs Dragons",
-    light: "bg-amber-100",
-    dark: "bg-amber-800",
-    white: { p: '🛡️', r: '🏰', n: '🐎', b: '🏹', q: '👸', k: '🤴' },
-    black: { p: '🔥', r: '🌋', n: '🦎', b: '🐍', q: '🐲', k: '💀' }
+    board: "bg-amber-950/20",
+    cells: { light: "bg-[#e2d1b3]", dark: "bg-[#7d4427]" },
+    w: { k: '🤴', q: '👸', r: '🏰', b: '🏹', n: '🐎', p: '🛡️' },
+    b: { k: '💀', q: '🐲', r: '🌋', b: '🐍', n: '🦎', p: '🔥' }
   },
-  heaven: {
+  heaven_hell: {
     name: "Angels vs Demons",
-    light: "bg-sky-100",
-    dark: "bg-indigo-900",
-    white: { p: '🕊️', r: '☁️', n: '🎺', b: '⚖️', q: '✨', k: '😇' },
-    black: { p: '🕯️', r: '⛓️', n: '🐐', b: '🔱', q: '🔥', k: '😈' }
+    board: "bg-blue-950/20",
+    cells: { light: "bg-blue-50", dark: "bg-slate-800" },
+    w: { k: '😇', q: '✨', r: '☁️', b: '⚖️', n: '🎺', p: '🕊️' },
+    b: { k: '😈', q: '🔥', r: '⛓️', b: '🐐', n: '🔱', p: '🕯️' }
   },
-  wizard: {
+  wizard_witch: {
     name: "Wizards vs Witches",
-    light: "bg-purple-100",
-    dark: "bg-purple-900",
-    white: { p: '🧪', r: '📜', n: '🦉', b: '🔮', q: '🧹', k: '🧙' },
-    black: { p: '🍄', r: '💀', n: '🐈‍⬛', b: '👁️', q: '🕯️', k: '🧙‍♀️' }
+    board: "bg-purple-950/20",
+    cells: { light: "bg-purple-100", dark: "bg-indigo-950" },
+    w: { k: '🧙', q: '🧹', r: '📜', b: '🔮', n: '🦉', p: '🧪' },
+    b: { k: '🧙‍♀️', q: '🕯️', r: '🍄', b: '👁️', n: '🐈‍⬛', p: '🍄' }
   },
   classic: {
-    name: "Classic Pro",
-    light: "bg-slate-200",
-    dark: "bg-slate-500",
-    white: { p: '♙', r: '♖', n: '♘', b: '♗', q: '♕', k: '♔' },
-    black: { p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚' }
+    name: "Classic_System",
+    board: "bg-black",
+    cells: { light: "bg-slate-200", dark: "bg-slate-600" },
+    w: { k: '♔', q: '♕', r: '♖', b: '♗', n: '♘', p: '♙' },
+    b: { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' }
   }
 };
 
 export default function App() {
   const [game, setGame] = useState(new Chess());
-  const [gameType, setGameType] = useState('chess'); // chess or checkers
-  const [theme, setTheme] = useState('mythic');
-  const [mode, setMode] = useState('pvp'); // pvp or ai
-  const [selectedSquare, setSelectedSquare] = useState(null);
+  const [theme, setTheme] = useState('vamp_wolf');
+  const [mode, setMode] = useState('ai');
   const [iq, setIq] = useState(1200);
+  const [selectedSquare, setSelectedSquare] = useState(null);
+  const [moveHistory, setMoveHistory] = useState([]);
+  const [gameOver, setGameOver] = useState(null);
+  const scrollRef = useRef(null);
 
-  // --- GAME LOGIC ---
-  const onSquareClick = (square) => {
-    if (selectedSquare === null) {
-      const piece = game.get(square);
-      if (piece && piece.color === game.turn()) {
-        setSelectedSquare(square);
-      }
-    } else {
-      const move = makeMove(selectedSquare, square);
-      if (move) {
-        setSelectedSquare(null);
-        if (mode === 'ai') setTimeout(makeAIMove, 500);
-      } else {
-        // Switch selection if clicking another of your own pieces
-        const piece = game.get(square);
-        if (piece && piece.color === game.turn()) {
-          setSelectedSquare(square);
-        } else {
-          setSelectedSquare(null);
-        }
-      }
-    }
-  };
+  const currentTheme = THEMES[theme];
 
-  const makeMove = (from, to) => {
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [moveHistory]);
+
+  function makeMove(from, to) {
     try {
       const gameCopy = new Chess(game.fen());
       const move = gameCopy.move({ from, to, promotion: 'q' });
       if (move) {
         setGame(gameCopy);
-        if (gameCopy.isCheckmate()) setIq(prev => prev + 25);
+        setMoveHistory(prev => [...prev, { san: move.san, color: move.color, time: new Date().toLocaleTimeString() }]);
+        if (gameCopy.isGameOver()) handleEnd(gameCopy);
+        else if (mode === 'ai') setTimeout(() => makeAIMove(gameCopy), 400);
         return move;
       }
     } catch (e) { return null; }
-  };
+  }
 
-  const makeAIMove = () => {
-    const moves = game.moves();
+  function makeAIMove(currentSearch) {
+    const moves = currentSearch.moves();
     if (moves.length > 0) {
-      const randomMove = moves[Math.floor(Math.random() * moves.length)];
-      game.move(randomMove);
-      setGame(new Chess(game.fen()));
+      const move = moves[Math.floor(Math.random() * moves.length)];
+      currentSearch.move(move);
+      setGame(new Chess(currentSearch.fen()));
+      setMoveHistory(prev => [...prev, { san: move, color: 'b', time: new Date().toLocaleTimeString() }]);
+      if (currentSearch.isGameOver()) handleEnd(currentSearch);
     }
-  };
+  }
 
-  const resetGame = () => {
-    setGame(new Chess());
-    setSelectedSquare(null);
-  };
-
-  const currentTheme = THEMES[theme];
+  function handleEnd(g) {
+    if (g.isCheckmate()) {
+      const winner = g.turn() === 'w' ? 'LOSS' : 'WIN';
+      if (winner === 'WIN') setIq(prev => prev + 65);
+      setGameOver(winner);
+    } else setGameOver('DRAW');
+  }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col items-center p-4">
+    <div className="fixed inset-0 bg-[#050505] text-slate-300 flex flex-col items-center font-mono select-none overflow-hidden touch-none">
+      <SpeedInsights />
       
-      {/* HEADER SECTION */}
-      <header className="w-full max-w-md flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-xl font-black tracking-tighter flex items-center gap-2 text-emerald-400">
-            <Swords size={24} /> MYTHIC CHESS
-          </h1>
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Digital Intel System v3.0</p>
-        </div>
-        <button onClick={resetGame} className="p-2 bg-slate-800 rounded-lg active:scale-95 transition-transform">
-          <RefreshCw size={20} className="text-slate-300" />
-        </button>
-      </header>
-
-      {/* IQ STAT CARD */}
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 p-3 rounded-2xl mb-6 flex items-center justify-between shadow-xl">
+      {/* HUD HEADER */}
+      <header className="w-full max-w-[500px] p-4 flex justify-between items-center border-b border-emerald-500/20 bg-emerald-500/5">
         <div className="flex items-center gap-3">
-          <div className="bg-emerald-500/20 p-2 rounded-lg">
-            <Zap className="text-emerald-400 fill-emerald-400" size={20} />
+          <div className="p-2 bg-emerald-950 border border-emerald-500 rounded animate-pulse">
+            <Swords size={18} className="text-emerald-500" />
           </div>
           <div>
-            <p className="text-[10px] text-slate-500 font-bold uppercase">Intelligence Rank</p>
-            <p className="text-lg font-black tracking-tight">{iq} <span className="text-xs text-emerald-500 font-medium">STRATEGIST</span></p>
+            <h1 className="text-xs font-bold tracking-widest text-emerald-400">MYTHIC_V3</h1>
+            <div className="flex items-center gap-1.5 text-[8px] text-emerald-500/40">
+              <Activity size={10}/> NEURAL_LINK: ACTIVE
+            </div>
           </div>
         </div>
-        <Trophy size={28} className="text-slate-700" />
-      </div>
-
-      {/* THE CHESS BOARD */}
-      <div className="w-full max-w-md aspect-square grid grid-cols-8 border-4 border-slate-800 rounded-xl overflow-hidden shadow-2xl relative">
-        {game.board().map((row, i) => row.map((square, j) => {
-          const squareCoord = String.fromCharCode(97 + j) + (8 - i);
-          const isDark = (i + j) % 2 === 1;
-          const piece = square;
-          const isSelected = selectedSquare === squareCoord;
-
-          return (
-            <div 
-              key={squareCoord}
-              onClick={() => onSquareClick(squareCoord)}
-              className={`flex items-center justify-center text-4xl sm:text-5xl cursor-pointer transition-colors
-                ${isDark ? currentTheme.dark : currentTheme.light}
-                ${isSelected ? 'ring-4 ring-inset ring-emerald-400 z-10' : ''}`}
-            >
-              {piece && (
-                <span className={`drop-shadow-lg select-none transform active:scale-110 transition-transform
-                  ${theme === 'classic' ? currentTheme.pieces[piece.color] : ''}`}>
-                  {theme === 'classic' 
-                    ? currentTheme.white[piece.type] 
-                    : (piece.color === 'w' ? currentTheme.white[piece.type] : currentTheme.black[piece.type])}
-                </span>
-              )}
+        <div className="flex gap-2">
+            <div className="bg-slate-900 border border-slate-800 px-3 py-1 rounded">
+                <p className="text-[7px] text-slate-500 uppercase">Strategic_IQ</p>
+                <p className="text-xs font-black text-white">{iq}</p>
             </div>
-          );
-        }))}
-      </div>
-
-      {/* GAME CONTROLS */}
-      <div className="w-full max-w-md mt-6 grid grid-cols-2 gap-3">
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
-          <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Battle Theme</label>
-          <select 
-            value={theme}
-            onChange={(e) => setTheme(e.target.value)}
-            className="bg-transparent text-emerald-400 font-bold text-sm outline-none w-full appearance-none cursor-pointer"
-          >
-            {Object.entries(THEMES).map(([id, t]) => <option key={id} value={id}>{t.name}</option>)}
-          </select>
+            <button onClick={() => {setGame(new Chess()); setGameOver(null); setMoveHistory([]);}} className="p-2 bg-slate-800 rounded active:scale-90">
+                <RefreshCw size={16} />
+            </button>
         </div>
+      </header>
 
-        <div className="bg-slate-900 border border-slate-800 p-3 rounded-xl">
-          <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Opponent</label>
-          <button 
-            onClick={() => setMode(mode === 'pvp' ? 'ai' : 'pvp')}
-            className="flex items-center gap-2 text-emerald-400 font-bold text-sm uppercase tracking-tight"
-          >
-            {mode === 'pvp' ? <User size={14}/> : <Cpu size={14}/>}
-            {mode === 'pvp' ? 'Player' : 'Deep Engine'}
-          </button>
+      {/* 3D BOARD CONTAINER */}
+      <main className="flex-grow flex items-center justify-center w-full px-2 py-4 perspective-1000">
+        <div className={`w-[96vw] h-[96vw] max-w-[450px] max-h-[450px] grid grid-cols-8 border-[8px] border-[#111] shadow-[0_40px_60px_-15px_rgba(0,0,0,0.9)] bg-black relative transform rotateX-10`}>
+          {game.board().map((row, i) => row.map((square, j) => {
+            const coords = `${String.fromCharCode(97 + j)}${8 - i}`;
+            const isDark = (i + j) % 2 === 1;
+            const isSelected = selectedSquare === coords;
+            
+            return (
+              <div 
+                key={coords}
+                onClick={() => {
+                    if (gameOver) return;
+                    if (selectedSquare === null) {
+                        if (square && square.color === game.turn()) setSelectedSquare(coords);
+                    } else {
+                        const m = makeMove(selectedSquare, coords);
+                        setSelectedSquare(null);
+                        if (!m && square && square.color === game.turn()) setSelectedSquare(coords);
+                    }
+                }}
+                className={`relative flex items-center justify-center transition-all
+                  ${isDark ? currentTheme.cells.dark : currentTheme.cells.light}
+                  ${isSelected ? 'ring-4 ring-inset ring-emerald-400 bg-emerald-500/20' : ''}`}
+              >
+                {square && (
+                  <div className="relative group cursor-pointer transition-transform active:scale-110">
+                    {/* 3D SHADOW DEPTH */}
+                    <span className="absolute inset-0 text-4xl blur-sm opacity-40 translate-y-2 translate-x-1 grayscale pointer-events-none">
+                        {currentTheme[square.color][square.type]}
+                    </span>
+                    {/* MAIN PIECE */}
+                    <span className="relative text-4xl sm:text-5xl drop-shadow-md z-10 block transform -translate-y-1 hover:-translate-y-2 transition-transform">
+                        {currentTheme[square.color][square.type]}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          }))}
+
+          {/* GAME OVER OVERLAY */}
+          {gameOver && (
+            <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
+              <Trophy size={60} className={gameOver === 'WIN' ? 'text-yellow-400' : 'text-red-500'} />
+              <h2 className="text-3xl font-black text-white my-2">{gameOver === 'WIN' ? 'SYSTEM_BYPASSED' : 'ACCESS_DENIED'}</h2>
+              <p className="text-emerald-500 text-[10px] tracking-widest mb-6 uppercase">New IQ Index: {iq}</p>
+              <button onClick={() => {setGame(new Chess()); setGameOver(null); setMoveHistory([]);}} className="w-full bg-emerald-600 text-black font-black py-4 rounded-lg tracking-tighter">RE-INITIALIZE LINK</button>
+            </div>
+          )}
         </div>
-      </div>
+      </main>
 
-      {/* NAVIGATION FOOTER */}
-      <nav className="w-full max-w-md mt-auto pt-6 flex justify-around border-t border-slate-900">
-        <button className="flex flex-col items-center gap-1 text-emerald-400">
-          <Swords size={20} />
-          <span className="text-[10px] font-bold">PLAY</span>
-        </button>
-        <button onClick={() => alert("Checkers & Puzzles Unlocking Soon...")} className="flex flex-col items-center gap-1 text-slate-500 hover:text-white transition-colors">
-          <LayoutGrid size={20} />
-          <span className="text-[10px] font-bold">MODE</span>
-        </button>
-      </nav>
-    </div>
-  );
-}
+      {/* TERMINAL LOG */}
+      <section className="w-full max-w-[500px] h-36 bg-black border-t border-slate-900 p-4 font-mono text-[9px]">
+        <div className="flex items-center gap-2 mb-2 text-slate-600 border-b border-white/5 pb-1 uppercase font-bold tracking-widest text-[10px]">
+          <Terminal size={14} /> Packet_Stream_Log
+        </div>
+        <div ref={scrollRef} className="h-full overflow-y-auto space-y-1.5 pb-8 scrollbar-hide">
+          {moveHistory.map((m, idx) => (
+            <div key={idx} className="flex justify-between items-center opacity-80 hover:opacity-100 transition-opacity">
+              <span className={m.color === 'w' ? "text-emerald-400" : "text-red-400"}>
+                {m.color === 'w' ? '>> UPLINK:'
